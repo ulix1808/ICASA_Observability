@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<appdynamics-agent xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+
+  <!-- Controller apunta al PROXY en DMZ -->
+  <controller host="10.250.5.12"
+              port="443"
+              ssl="true"
+              enable_tls12="true"
+              enable_config_deployment="true">
+
+    <account name="teresa202606020142139"
+             password="CAMBIAR_POR_ACCESS_KEY" />
+
+    <application name="ICASA-DEV-IIS" />
+
+    <!-- Reverse proxy — controller host es el proxy -->
+    <proxy host="10.250.5.12" port="443" enabled="true" />
+  </controller>
+
+  <!-- Instrumentación automática de todos los app pools IIS -->
+  <iis>
+    <automatic />
+  </iis>
+
+  <machine-agent />
+
+</appdynamics-agent>

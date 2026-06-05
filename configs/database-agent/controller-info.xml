@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<controller-info>
+    <!-- Proxy DMZ — NO apuntar directamente al FQDN SaaS -->
+    <controller-host>10.250.5.12</controller-host>
+    <controller-port>443</controller-port>
+    <controller-ssl-enabled>true</controller-ssl-enabled>
+
+    <!-- Cuenta AppDynamics SaaS DEV -->
+    <account-name>teresa202606020142139</account-name>
+    <account-access-key>CAMBIAR_POR_ACCESS_KEY</account-access-key>
+
+    <!-- Identificador único del agente -->
+    <db-agent-name>ICASA-DEV-DB-AGENT</db-agent-name>
+</controller-info>

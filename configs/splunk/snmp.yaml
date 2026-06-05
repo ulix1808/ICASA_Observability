@@ -1,0 +1,12 @@
+# Inventario SNMP — completar con dispositivos reales ICASA
+devices: []
+
+profiles:
+  network_base:
+    varBinds:
+      - oid: 1.3.6.1.2.1.1.3.0
+        metric_name: sysUpTime
+      - oid: 1.3.6.1.2.1.1.5.0
+        metric_name: sysName
+      - oid: 1.3.6.1.2.1.2.2.1.10
+        metric_name: ifInOctets
