@@ -162,12 +162,55 @@ sudo tail -f /var/log/nginx/error.log
 
 ## Troubleshooting
 
+### `curl: (7) Failed to connect to localhost port 443: Connection refused`
+
+Nginx está **activo** pero **no escucha en 443**. Diagnóstico en el servidor proxy (`STMPDMZPOCOB` / `10.250.5.12`):
+
+```bash
+# 1. Confirmar que es el servidor proxy DMZ (no el colector STMPLPOCOB .179/.180)
+hostname -f
+ip addr | grep "inet "
+
+# 2. Ver en qué puertos escucha Nginx
+sudo ss -tlnp | grep nginx
+# Debe mostrar :443, :8443 y :8444. Si solo aparece :80, falta la config SSL.
+
+# 3. Verificar que existen los archivos de configuración ICASA
+ls -la /etc/nginx/conf.d/
+# Deben existir: appdynamics-upstream.conf  splunk-upstream.conf
+
+# 4. Verificar certificados TLS
+ls -la /etc/nginx/ssl/proxy.crt /etc/nginx/ssl/proxy.key
+
+# 5. Validar configuración
+sudo nginx -t
+
+# 6. Si faltan configs o certificados, copiar desde el repo y reiniciar
+sudo cp appdynamics-upstream.conf splunk-upstream.conf /etc/nginx/conf.d/
+sudo ./scripts/generate-certs-selfsigned.sh   # o instalar certs de CA
+sudo nginx -t && sudo systemctl restart nginx
+
+# 7. Probar de nuevo
+curl -k https://localhost/health
+curl -k https://10.250.5.12/health
+```
+
+| Causa | Indicador | Solución |
+|-------|-----------|----------|
+| Servidor incorrecto | hostname `STMPPOCOB` (colector) | Ejecutar en **proxy DMZ** `10.250.5.12` |
+| Config no desplegada | `conf.d/` sin archivos ICASA | Copiar configs del repo |
+| Certificados faltantes | `nginx -t` error SSL | Generar o instalar `proxy.crt` / `proxy.key` |
+| Solo puerto 80 activo | `ss` muestra `:80` pero no `:443` | Desplegar config SSL y `restart nginx` |
+| Firewall local | `ss` muestra `:443` pero curl falla desde otro host | `firewall-cmd --add-service=https` |
+
+### Otros errores
+
 | Síntoma | Causa probable | Solución |
 |---------|---------------|----------|
 | 502 Bad Gateway | Proxy no alcanza SaaS | Verificar DNS y firewall DMZ→Internet |
 | SSL handshake failed (agente) | CA no confiada en agente | Importar CA del proxy en truststore |
 | 503 Service Unavailable | Upstream AppDynamics caído | Verificar status SaaS |
-| Connection refused :443 | Firewall LAN→DMZ | Solicitar apertura a seguridad |
+| Connection refused :443 (desde LAN) | Firewall perimetral | Solicitar apertura a seguridad |
 
 ## Referencias
 
