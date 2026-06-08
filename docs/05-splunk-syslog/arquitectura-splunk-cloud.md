@@ -43,9 +43,9 @@ flowchart TB
     SNMP --> SC4
     MON --- UF
     COL --- SC4
-    UF -->|"HTTPS :8444"| PROXY
+    UF -->|"HTTPS :8444<br/>(puerto interno proxy)"| PROXY
     SC4 -->|"HEC HTTPS :8444"| PROXY
-    PROXY --> SC
+    PROXY -->|":443 oficial"| SC
 ```
 
 ## Componentes
@@ -88,6 +88,10 @@ SC4SNMP envía datos vía HEC **directamente al proxy** desde `.180`, sin pasar 
 - Definición final de índices
 
 Ver [pendientes.md](../00-arquitectura/pendientes.md).
+
+## Puertos — aclaración importante
+
+El **8444** es el puerto del **proxy Nginx interno**, no de Splunk Cloud. Hacia Internet el proxy usa **443**. Ver [puertos-splunk-cloud.md](puertos-splunk-cloud.md).
 
 ## Referencias
 

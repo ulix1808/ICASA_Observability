@@ -22,15 +22,19 @@ Repositorio: [github.com/ulix1808/ICASA_Observability](https://github.com/ulix18
 LAN (10.2.x.x)                              DMZ                    Internet
 ┌──────────────────────────┐         ┌──────────────────┐    ┌─────────────────────┐
 │ STMPLPOCOB MONITOR       │         │ Firewall         │    │ AppDynamics SaaS    │
-│ 10.2.32.179              │──443───►│                  │───►│ teresa...appdynamics│
-│  • Database Agent        │──8444──►│ STMPDMZPOCOB     │443 │ analytics.api...    │
-│  • Splunk UF (syslog)    │         │ PROXY            │    ├─────────────────────┤
-├──────────────────────────┤         │ 10.250.5.12      │    │ Splunk Cloud        │
-│ STMPLPOCOB COLECTOR      │──443───►│ (Nginx RHEL 9)   │8444│ (URL pendiente)     │
-│ 10.2.32.180              │──8444──►│                  │    └─────────────────────┘
+│ 10.2.32.179              │──443───►│                  │───►│ :443                │
+│  • Database Agent        │         │ STMPDMZPOCOB     │    ├─────────────────────┤
+│  • Splunk UF (syslog)    │──8444──►│ PROXY            │───►│ Splunk Cloud :443   │
+├──────────────────────────┤         │ 10.250.5.12      │    │ (URL pendiente)     │
+│ STMPLPOCOB COLECTOR      │──443───►│ (Nginx RHEL 9)   │    └─────────────────────┘
+│ 10.2.32.180              │──8444──►│                  │
 │  • HTTP SDK (SAP)        │         └──────────────────┘
-│  • SC4SNMP              │
+│  • SC4SNMP (HEC)         │
 └──────────────────────────┘
+
+  LAN → Proxy :443  = AppDynamics (agentes APM)
+  LAN → Proxy :8444 = Splunk (HEC) — puerto INTERNO del proxy, no de Splunk Cloud
+  Proxy → Internet  = siempre :443 hacia Splunk Cloud y AppDynamics
          ▲
          │ Syslog TCP/514 → .179  |  SNMP → .180
    Servidores, equipos de red, SAP, SQL Server, IIS
@@ -64,7 +68,7 @@ https://github.com/ulix1808/ICASA_Observability/raw/main/packages/db-agent-26.4.
 | 2 | Database Agent (RHEL 9 + SQL Server) | [docs/02-database-agent/](docs/02-database-agent/) |
 | 3 | .NET Agent + IIS | [docs/03-dotnet-agent-iis/](docs/03-dotnet-agent-iis/) |
 | 4 | SAP Monitoring | [docs/04-sap-monitoring/](docs/04-sap-monitoring/) |
-| 5 | Splunk Syslog | [docs/05-splunk-syslog/](docs/05-splunk-syslog/) |
+| 5 | Splunk Syslog | [docs/05-splunk-syslog/](docs/05-splunk-syslog/) — [puertos validados](docs/05-splunk-syslog/puertos-splunk-cloud.md) |
 | 6 | Splunk Connect for SNMP | [docs/06-splunk-sc4snmp/](docs/06-splunk-sc4snmp/) |
 
 ## Configuraciones y scripts

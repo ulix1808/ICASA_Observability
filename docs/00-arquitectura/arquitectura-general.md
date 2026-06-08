@@ -103,9 +103,9 @@ El ABAP Agent apunta al HTTP SDK en **10.2.32.180** (colector). El HTTP SDK envÃ
 flowchart LR
     DEV["Dispositivos red<br/>Syslog TCP 514"] --> UF["Splunk UF<br/>10.2.32.179"]
     SNMP["Dispositivos SNMP"] --> SC4["SC4SNMP<br/>10.2.32.180"]
-    UF -->|"HTTPS :8444"| PROXY["Nginx Proxy<br/>10.250.5.12"]
+    UF -->|"HTTPS :8444<br/>listener proxy"| PROXY["Nginx Proxy<br/>10.250.5.12"]
     SC4 -->|"HEC HTTPS :8444"| PROXY
-    PROXY --> SC["Splunk Cloud"]
+    PROXY -->|":443 oficial"| SC["Splunk Cloud"]
 ```
 
 ## Puertos requeridos
@@ -128,7 +128,7 @@ flowchart LR
 |--------|---------|--------|-----------|-----|
 | `10.250.5.12` | `*.saas.appdynamics.com` | 443 | TCP | AppDynamics Controller |
 | `10.250.5.12` | `analytics.api.appdynamics.com` | 443 | TCP | Analytics Events (SAP) |
-| `10.250.5.12` | Splunk Cloud endpoint | 443 | TCP | Ingesta Splunk |
+| `10.250.5.12` | `*.splunkcloud.com` | **443** | TCP | Proxy â†’ Splunk Cloud (HEC). **No usar 8444 hacia Internet** |
 
 ### Firewall LAN interno
 
