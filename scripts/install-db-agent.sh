@@ -51,10 +51,23 @@ fi
 echo "[4/6] Copiando configuración..."
 cp "$REPO_DIR/configs/database-agent/controller-info.xml" "$DB_AGENT_HOME/conf/"
 
-# Truststore
+# Truststore — CA del proxy autofirmado
 CA_CERT="${CA_CERT_PATH:-/etc/pki/tls/certs/icasa-ca.crt}"
+echo "[4b/6] Configurando truststore TLS (CA del proxy)..."
 if [[ -f "$CA_CERT" ]]; then
     "$SCRIPT_DIR/install-truststore-agent.sh" --ca-cert "$CA_CERT" --agent-home "$DB_AGENT_HOME"
+else
+    echo ""
+    echo "  AVISO: No se encontró ${CA_CERT}"
+    echo "  El Database Agent necesita la CA del proxy (certificado autofirmado)."
+    echo ""
+    echo "  1. En el PROXY (10.250.5.12) debe existir /etc/nginx/ssl/ca.crt"
+    echo "     (se genera con: sudo ./scripts/generate-certs-selfsigned.sh)"
+    echo "  2. Cópielo a este servidor:"
+    echo "     sudo ./scripts/fetch-proxy-ca.sh"
+    echo "  3. Importe en truststore:"
+    echo "     sudo ./scripts/install-truststore-agent.sh --ca-cert ${CA_CERT} --agent-home ${DB_AGENT_HOME}"
+    echo ""
 fi
 
 # 5. Permisos

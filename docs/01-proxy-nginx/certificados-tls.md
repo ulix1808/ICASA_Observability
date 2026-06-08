@@ -76,12 +76,28 @@ Usar el script incluido:
 sudo ./scripts/generate-certs-selfsigned.sh
 ```
 
-Genera:
-- `/etc/nginx/ssl/ca.crt` — CA raíz (distribuir a agentes)
-- `/etc/nginx/ssl/proxy.crt` — Certificado del proxy
-- `/etc/nginx/ssl/proxy.key` — Clave privada del proxy
+Genera en el **proxy** (`10.250.5.12`):
 
-### Importar CA en Java (Database Agent)
+| Archivo | Ubicación | Uso |
+|---------|-----------|-----|
+| **CA raíz** | `/etc/nginx/ssl/ca.crt` | **Copiar a cada servidor con agentes** |
+| Cert proxy | `/etc/nginx/ssl/proxy.crt` | Solo en Nginx (proxy) |
+| Key proxy | `/etc/nginx/ssl/proxy.key` | Solo en Nginx (proxy) |
+| Copia CA | `/etc/pki/tls/certs/icasa-ca.crt` | Copia local en el proxy |
+
+### Distribuir CA al servidor del Database Agent (MONITOR `.179`)
+
+```bash
+# En MONITOR — copiar CA desde el proxy
+sudo ./scripts/fetch-proxy-ca.sh
+
+# Importar en truststore Java del agente
+sudo ./scripts/install-truststore-agent.sh \
+  --ca-cert /etc/pki/tls/certs/icasa-ca.crt \
+  --agent-home /opt/appdynamics/db-agent
+```
+
+### Importar CA en Java (Database Agent) — referencia manual
 
 ```bash
 export DB_AGENT_HOME=/opt/appdynamics/db-agent

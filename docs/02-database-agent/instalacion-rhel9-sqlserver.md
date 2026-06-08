@@ -99,13 +99,53 @@ Valores DEV:
 
 > El agente apunta al **proxy** (`10.250.5.12`), no al FQDN SaaS directamente.
 
-#### 4. Configurar truststore TLS
+#### 4. Configurar truststore TLS (certificado autofirmado del proxy)
+
+El agente se conecta al **proxy** (`10.250.5.12:443`) con HTTPS. El proxy usa un **certificado autofirmado**, así que el agente Java debe confiar en la **CA raíz** que firmó ese certificado.
+
+```mermaid
+flowchart LR
+    PROXY["Proxy 10.250.5.12<br/>generate-certs-selfsigned.sh"] -->|"genera"| CA["/etc/nginx/ssl/ca.crt<br/>CA raíz ICASA"]
+    CA -->|"copiar"| MON["MONITOR 10.2.32.179<br/>/etc/pki/tls/certs/icasa-ca.crt"]
+    MON -->|"importar"| TS["truststore.jks<br/>del Database Agent"]
+    DB["Database Agent"] -->|"HTTPS :443 confía en CA"| PROXY
+```
+
+**Paso 4.1 — En el PROXY (`10.250.5.12`)** — generar certs (si no se hizo con `install-nginx-proxy.sh`):
+
+```bash
+sudo ./scripts/generate-certs-selfsigned.sh
+# Crea: /etc/nginx/ssl/ca.crt  ← este archivo hay que llevarlo al agente
+```
+
+**Paso 4.2 — En el MONITOR (`10.2.32.179`)** — copiar la CA del proxy:
+
+```bash
+# Opción A: script automático (requiere SSH al proxy)
+sudo ./scripts/fetch-proxy-ca.sh
+
+# Opción B: scp manual
+sudo scp root@10.250.5.12:/etc/nginx/ssl/ca.crt /etc/pki/tls/certs/icasa-ca.crt
+```
+
+**Paso 4.3 — Importar CA en el truststore del agente:**
 
 ```bash
 sudo ./scripts/install-truststore-agent.sh \
   --ca-cert /etc/pki/tls/certs/icasa-ca.crt \
   --agent-home /opt/appdynamics/db-agent
 ```
+
+**Paso 4.4 — Verificar:**
+
+```bash
+keytool -list -keystore /opt/appdynamics/db-agent/conf/truststore.jks -storepass changeit | grep icasa
+# Debe mostrar: icasa-ca
+```
+
+> **No es el certificado de AppDynamics SaaS.** Es solo la CA del proxy interno. El proxy valida AppDynamics con las CA públicas del sistema; el agente solo necesita confiar en el proxy.
+
+Ver también: [certificados-tls.md](../01-proxy-nginx/certificados-tls.md)
 
 #### 5. Configurar credenciales SQL Server
 

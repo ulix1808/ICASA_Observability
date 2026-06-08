@@ -16,7 +16,20 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$CA_CERT" || ! -f "$CA_CERT" ]]; then
-    echo "Error: especificar --ca-cert con ruta válida"
+    echo "Error: no se encontró el archivo CA: ${CA_CERT:-'(no especificado)'}"
+    echo ""
+    echo "¿De dónde sale este certificado?"
+    echo "  Es la CA raíz que genera el PROXY al crear certs autofirmados."
+    echo "  Se crea al ejecutar en el proxy (10.250.5.12):"
+    echo "    sudo ./scripts/generate-certs-selfsigned.sh"
+    echo ""
+    echo "  Archivo en el proxy: /etc/nginx/ssl/ca.crt"
+    echo ""
+    echo "Cópielo al servidor del agente (MONITOR 10.2.32.179):"
+    echo "  sudo ./scripts/fetch-proxy-ca.sh"
+    echo "  # o: scp root@10.250.5.12:/etc/nginx/ssl/ca.crt /etc/pki/tls/certs/icasa-ca.crt"
+    echo ""
+    echo "Luego ejecute de nuevo este script con --ca-cert apuntando al archivo copiado."
     exit 1
 fi
 
