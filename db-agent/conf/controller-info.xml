@@ -2,7 +2,7 @@
 
     <!--  ICASA DEV — Apunta al reverse proxy en DMZ, NO al FQDN SaaS directamente.
     Nginx en 10.250.5.12 reenvía a teresa202606020142139.saas.appdynamics.com
-    Copiar a: /opt/appdynamics/db-agent/conf/controller-info.xml  -->
+    Documentación: docs/02-database-agent/instalacion-rhel9-sqlserver.md  -->
 
     <controller-host>10.250.5.12</controller-host>
 
