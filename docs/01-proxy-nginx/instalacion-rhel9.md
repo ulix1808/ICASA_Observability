@@ -110,6 +110,40 @@ Nginx reescribe el header `Host` al FQDN real del controller SaaS en el upstream
 | `appd_analytics` | `analytics.api.appdynamics.com:443` | SAP Analytics Events |
 | `splunk_cloud` | Variable `$SPLUNK_HEC_HOST` | Splunk Cloud HEC |
 
+## Reiniciar Nginx
+
+Aplicar cambios de configuración o certificados:
+
+```bash
+# 1. Validar sintaxis antes de reiniciar (obligatorio)
+sudo nginx -t
+
+# 2. Recargar configuración sin cortar conexiones activas (recomendado)
+sudo systemctl reload nginx
+
+# 3. Reinicio completo (si reload no aplica o tras cambio de certificados)
+sudo systemctl restart nginx
+
+# 4. Verificar que quedó en ejecución
+sudo systemctl status nginx
+```
+
+Cuándo usar cada opción:
+
+| Situación | Comando |
+|-----------|---------|
+| Cambio en `.conf` de `/etc/nginx/conf.d/` | `nginx -t` → `systemctl reload nginx` |
+| Renovación de certificado TLS | `nginx -t` → `systemctl restart nginx` |
+| Nginx no responde / error en logs | `systemctl restart nginx` |
+| Tras instalar o actualizar paquete nginx | `systemctl restart nginx` |
+
+Si `nginx -t` falla, **no reiniciar** — corregir el error en la configuración primero.
+
+```bash
+# Ver último error si el servicio no arranca
+sudo journalctl -u nginx -n 50 --no-pager
+```
+
 ## Monitoreo del proxy
 
 Endpoint de health check:
