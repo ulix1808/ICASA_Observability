@@ -89,9 +89,12 @@ SC4SNMP envía datos vía HEC **directamente al proxy** desde `.180`, sin pasar 
 
 Ver [pendientes.md](../00-arquitectura/pendientes.md).
 
-## Puertos — aclaración importante
+## Puertos — diseño aprobado
 
-El **8444** es el puerto del **proxy Nginx interno**, no de Splunk Cloud. Hacia Internet el proxy usa **443**. Ver [puertos-splunk-cloud.md](puertos-splunk-cloud.md).
+- **LAN → Proxy:** `:8444` (Splunk HEC) — Nginx separa del tráfico AppDynamics (`:443`)
+- **Proxy → Internet:** `:443` únicamente (requisito cliente)
+
+Ver [puertos-splunk-cloud.md](puertos-splunk-cloud.md).
 
 ## Referencias
 

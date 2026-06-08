@@ -32,9 +32,10 @@ LAN (10.2.x.x)                              DMZ                    Internet
 │  • SC4SNMP (HEC)         │
 └──────────────────────────┘
 
+  Requisito cliente: Proxy → Internet SOLO :443
   LAN → Proxy :443  = AppDynamics (agentes APM)
-  LAN → Proxy :8444 = Splunk (HEC) — puerto INTERNO del proxy, no de Splunk Cloud
-  Proxy → Internet  = siempre :443 hacia Splunk Cloud y AppDynamics
+  LAN → Proxy :8444 = Splunk (HEC) — Nginx separa tráfico en el proxy
+  Proxy → Internet  = :443 hacia Splunk Cloud y AppDynamics
          ▲
          │ Syslog TCP/514 → .179  |  SNMP → .180
    Servidores, equipos de red, SAP, SQL Server, IIS

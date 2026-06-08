@@ -151,13 +151,27 @@ Ver [certificados-tls.md](../01-proxy-nginx/certificados-tls.md).
 | SAP ABAP Agent | Confirmada |
 | Controller | `teresa202606020142139` — expira 07/03/2026 |
 
+## Política de puertos (requisito cliente)
+
+| Dirección | Puerto | Descripción |
+|-----------|--------|-------------|
+| LAN → Proxy | **443** | Tráfico AppDynamics (agentes APM, HTTP SDK) |
+| LAN → Proxy | **8444** | Tráfico Splunk (UF, SC4SNMP HEC) — Nginx separa por listener |
+| LAN → Proxy | **8443** | Analytics Events API (SAP), si aplica |
+| **Proxy → Internet** | **443 únicamente** | Hacia AppDynamics SaaS y Splunk Cloud |
+
+Nginx recibe en `:8444` desde la LAN y reenvía a Splunk Cloud en `:443`. El 8444 **no sale a Internet**.
+
+Ver [puertos-splunk-cloud.md](../05-splunk-syslog/puertos-splunk-cloud.md).
+
 ## Decisiones de diseño
 
 | Decisión | Valor |
 |----------|-------|
 | Tipo de proxy | Reverse proxy Nginx |
 | Autenticación proxy | No requerida |
-| Salida a Internet | Solo desde DMZ (`10.250.5.12`) |
+| Salida a Internet | Solo **:443** desde DMZ (`10.250.5.12`) |
+| Separación tráfico Splunk | Listener **:8444** interno en proxy |
 | Database Agent + Splunk UF | `10.2.32.179` (MONITOR) |
 | HTTP SDK SAP + SC4SNMP | `10.2.32.180` (COLECTOR) |
 | Ambiente documentado | DEV |

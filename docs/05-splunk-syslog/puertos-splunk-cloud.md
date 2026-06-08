@@ -1,62 +1,86 @@
-# Puertos Splunk Cloud — Validación
+# Puertos Splunk — Diseño aprobado por el cliente
 
-## Respuesta corta
+## Requisito del cliente
 
-**No.** El puerto **8444 NO es el puerto de Splunk Cloud**. Es un puerto **interno** del proxy Nginx en ICASA para separar el tráfico Splunk del tráfico AppDynamics.
+> **Hacia afuera (DMZ → Internet): solo puerto 443.**  
+> **Hacia el proxy (LAN → DMZ): puerto 8444** para tráfico Splunk. Nginx separa el tráfico por listener.
 
-| Tramo | Puerto | ¿Validado? |
-|-------|--------|------------|
-| LAN → Proxy Nginx (`10.250.5.12`) | **8444** | Elección de diseño ICASA (listener Nginx para HEC) |
-| Proxy → Splunk Cloud (Internet) | **443** | **Sí** — puerto oficial HEC en producción |
-| Splunk Cloud trial / free tier HEC | **8088** | Alternativa según [documentación Splunk](https://help.splunk.com/en/splunk-cloud-platform/get-started/get-data-in/10.2.2510/get-data-with-http-event-collector/set-up-and-use-http-event-collector-in-splunk-web) |
+Este diseño cumple ambos requisitos.
 
-## Por qué usamos 8444 en el proxy
+## Resumen de puertos
 
-Nginx escucha en varios puertos en `10.250.5.12`:
-
-| Puerto proxy | Upstream | Uso |
-|--------------|----------|-----|
-| **443** | `teresa202606020142139.saas.appdynamics.com:443` | Agentes AppDynamics |
-| **8443** | `analytics.api.appdynamics.com:443` | Analytics Events (SAP) |
-| **8444** | `*.splunkcloud.com:443` | HEC Splunk (SC4SNMP, ingest HTTP) |
-
-El proxy **termina TLS en 8444** y reenvía a Splunk Cloud en **443**:
+| Tramo | Puerto | Rol |
+|-------|--------|-----|
+| LAN → Proxy (`10.250.5.12`) — AppDynamics | **443** | Database Agent, .NET Agent, HTTP SDK, Machine Agent |
+| LAN → Proxy (`10.250.5.12`) — Splunk | **8444** | Splunk UF, SC4SNMP (HEC) |
+| LAN → Proxy (`10.250.5.12`) — Analytics SAP | **8443** | Analytics Events API (opcional) |
+| **Proxy → Internet** — AppDynamics | **443** | Hacia `*.saas.appdynamics.com` |
+| **Proxy → Internet** — Splunk Cloud | **443** | Hacia `*.splunkcloud.com` (HEC oficial) |
 
 ```
-SC4SNMP / HEC  →  https://10.250.5.12:8444/services/collector/event
-                        ↓ (Nginx reverse proxy)
-                  https://input-xxx.splunkcloud.com:443/services/collector/event
+┌──────────── LAN ────────────┐     ┌──── DMZ Proxy ────┐     ┌── Internet ──┐
+│ UF / SC4SNMP                │     │ Nginx             │     │ Splunk Cloud │
+│  ──8444──► 10.250.5.12:8444 │────►│ listen :8444      │────►│    :443      │
+│                             │     │ proxy_pass → :443 │     └──────────────┘
+│ DB Agent / .NET / SAP SDK   │     │                   │
+│  ──443───► 10.250.5.12:443  │────►│ listen :443       │────► AppDynamics :443
+└─────────────────────────────┘     └───────────────────┘
 ```
 
-Configuración: `configs/nginx/splunk-upstream.conf` — upstream en puerto **443**.
+## Cómo Nginx separa el tráfico
 
-## Reglas de firewall correctas
+Nginx en `10.250.5.12` usa **listeners distintos** en la LAN; hacia Internet todo sale por **443**:
 
-### Firewall LAN → DMZ
+| Listener Nginx (entrada LAN) | Config | Upstream (salida Internet) |
+|-----------------------------|--------|--------------------------|
+| `:443` | `configs/nginx/appdynamics-upstream.conf` | `teresa202606020142139.saas.appdynamics.com:443` |
+| `:8443` | `configs/nginx/appdynamics-upstream.conf` | `analytics.api.appdynamics.com:443` |
+| `:8444` | `configs/nginx/splunk-upstream.conf` | `*.splunkcloud.com:443` |
+
+Ejemplo flujo Splunk:
+
+```
+https://10.250.5.12:8444/services/collector/event   (LAN → proxy)
+         ↓ Nginx termina TLS, reenvía HTTPS
+https://input-xxx.splunkcloud.com:443/services/collector/event   (proxy → Internet)
+```
+
+## Reglas de firewall
+
+### LAN → DMZ (entrada al proxy)
+
+| Origen | Destino | Puerto | Uso |
+|--------|---------|--------|-----|
+| `10.2.32.179`, `10.2.32.180`, IIS | `10.250.5.12` | **443** | AppDynamics |
+| `10.2.32.179`, `10.2.32.180` | `10.250.5.12` | **8444** | Splunk HEC |
+| SAP (analytics, si aplica) | `10.250.5.12` | **8443** | Analytics Events |
+
+### DMZ → Internet (salida — solo 443)
 
 | Origen | Destino | Puerto |
 |--------|---------|--------|
-| `10.2.32.179`, `10.2.32.180` | `10.250.5.12` | **8444** TCP |
+| `10.250.5.12` | `*.saas.appdynamics.com` | **443** |
+| `10.250.5.12` | `analytics.api.appdynamics.com` | **443** |
+| `10.250.5.12` | `*.splunkcloud.com` | **443** |
 
-### Firewall DMZ → Internet (Splunk)
+> El **8444 no se abre hacia Internet**. Solo existe en la interfaz LAN→DMZ para que Nginx distinga tráfico Splunk del tráfico AppDynamics.
 
-| Origen | Destino | Puerto |
-|--------|---------|--------|
-| `10.250.5.12` | `*.splunkcloud.com` (URL definitiva) | **443** TCP |
+## Splunk Cloud — puerto oficial
 
-> **No abrir 8444 hacia Internet.** Splunk Cloud no escucha en ese puerto.
+Según [documentación Splunk HEC](https://help.splunk.com/en/splunk-cloud-platform/get-started/get-data-in/10.2.2510/get-data-with-http-event-collector/set-up-and-use-http-event-collector-in-splunk-web):
 
-## Universal Forwarder — consideración adicional
+- **Producción:** HEC en puerto **443**
+- **Trial / free tier:** HEC en puerto **8088**
 
-El **Splunk UF** en `10.2.32.179` puede usar dos métodos hacia Splunk Cloud:
+ICASA usa producción → el proxy reenvía a **443**.
 
-| Método | Puerto hacia Cloud | Notas |
-|--------|-------------------|-------|
-| **HEC (HTTP)** | 443 vía proxy `:8444` | Compatible con nuestro Nginx HTTP reverse proxy |
-| **Splunk-to-Splunk (tcpout)** | **9997** típico | Protocolo propietario; requiere `splunkclouduf.spl` y posiblemente proxy TCP (nginx `stream`), no HTTP |
+## Universal Forwarder — nota
 
-Cuando se reciba la URL y credenciales de Splunk Cloud, validar con el admin de Splunk cuál método aplica. Si es tcpout nativo (`9997`), habrá que ajustar el proxy o abrir **443/9997** directamente según indique Splunk.
+Si Splunk indica que el UF debe usar **tcpout en 9997** (protocolo Splunk nativo, no HTTP), habrá que evaluar proxy TCP (`nginx stream`) o método HEC sobre `:8444`. Validar cuando se reciba la URL y credenciales de Splunk Cloud.
 
-Referencias:
+## Referencias
+
 - [HEC — Splunk Cloud](https://help.splunk.com/en/splunk-cloud-platform/get-started/get-data-in/10.2.2510/get-data-with-http-event-collector/set-up-and-use-http-event-collector-in-splunk-web)
-- [UF credentials — Splunk Cloud](https://help.splunk.com/en/splunk-cloud-platform/forward-and-process-data/universal-forwarder-manual/10.4/configure-the-universal-forwarder/enable-a-receiver-for-the-splunk-cloud-platform)
+- [Proxy Nginx — instalación](../01-proxy-nginx/instalacion-rhel9.md)
+- `configs/nginx/splunk-upstream.conf`
+- `configs/nginx/appdynamics-upstream.conf`

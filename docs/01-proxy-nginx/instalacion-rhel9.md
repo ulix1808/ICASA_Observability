@@ -92,6 +92,16 @@ Los agentes AppDynamics deben apuntar al **proxy**, no directamente al controlle
 
 Nginx reescribe el header `Host` al FQDN real del controller SaaS en el upstream.
 
+## Separación de tráfico por puerto (requisito cliente)
+
+| Listener en proxy (LAN → DMZ) | Tráfico | Salida proxy → Internet |
+|------------------------------|---------|-------------------------|
+| **:443** | AppDynamics (agentes APM, HTTP SDK) | `:443` → SaaS |
+| **:8443** | Analytics Events (SAP) | `:443` → analytics.api.appdynamics.com |
+| **:8444** | Splunk HEC (UF, SC4SNMP) | `:443` → Splunk Cloud |
+
+> Hacia afuera **solo 443**. Los puertos 8443/8444 existen solo en la interfaz LAN→DMZ para que Nginx enrute correctamente.
+
 ## Upstreams configurados
 
 | Upstream | Destino | Uso |
