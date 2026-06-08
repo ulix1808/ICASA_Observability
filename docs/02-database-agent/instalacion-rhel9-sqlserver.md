@@ -1,13 +1,13 @@
 # Database Agent — RHEL 9 + SQL Server
 
-Servidor agente: **STMPLPOCOB COLECTOR** — `10.2.32.180`  
+Servidor agente: **STMPLPOCOB MONITOR** — `10.2.32.179`  
 Ambiente: **DEV**
 
 ## Arquitectura
 
 ```mermaid
 flowchart LR
-    SQL[(SQL Server<br/>pendiente IP)] -->|"JDBC :1433"| DB["Database Agent<br/>10.2.32.180<br/>RHEL 9"]
+    SQL[(SQL Server<br/>pendiente IP)] -->|"JDBC :1433"| DB["Database Agent<br/>10.2.32.179<br/>RHEL 9"]
     DB -->|"HTTPS :443"| PROXY["Nginx Proxy<br/>10.250.5.12"]
     PROXY --> APPD["AppDynamics SaaS<br/>teresa...appdynamics.com"]
 ```

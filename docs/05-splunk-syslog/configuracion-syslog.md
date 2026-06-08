@@ -1,12 +1,12 @@
 # Splunk Syslog — Configuración TCP 514
 
-Colector: **STMPLPOCOB COLECTOR** — `10.2.32.180`
+Servidor: **STMPLPOCOB MONITOR** — `10.2.32.179`
 
 ## Requisitos
 
-- Splunk Universal Forwarder instalado en colector
-- Puerto TCP 514 abierto en colector (desde equipos de red LAN)
-- Conectividad colector → proxy `10.250.5.12:8444`
+- Splunk Universal Forwarder instalado en MONITOR (`10.2.32.179`)
+- Puerto TCP 514 abierto en MONITOR (desde equipos de red LAN)
+- Conectividad MONITOR → proxy `10.250.5.12:8444`
 - Token HEC o configuración UF outputs hacia Splunk Cloud (pendiente URL)
 
 ## Instalación Universal Forwarder
@@ -82,22 +82,22 @@ Solicitar apertura:
 
 | Origen | Destino | Puerto | Protocolo |
 |--------|---------|--------|-----------|
-| Equipos red (LAN) | `10.2.32.180` | 514 | TCP |
-| `10.2.32.180` | `10.250.5.12` | 8444 | TCP |
+| Equipos red (LAN) | `10.2.32.179` | 514 | TCP |
+| `10.2.32.179` | `10.250.5.12` | 8444 | TCP |
 
 ## Configuración en dispositivos de red
 
 Ejemplo genérico (Cisco IOS):
 
 ```
-logging host 10.2.32.180 transport tcp port 514
+logging host 10.2.32.179 transport tcp port 514
 logging trap informational
 ```
 
 Ejemplo Linux (rsyslog):
 
 ```
-*.* @@10.2.32.180:514
+*.* @@10.2.32.179:514
 ```
 
 ## Verificación
@@ -107,7 +107,7 @@ Ejemplo Linux (rsyslog):
 sudo ss -tlnp | grep 514
 
 # Test local
-logger -n 10.2.32.180 -P 514 -T "Test syslog ICASA DEV"
+logger -n 10.2.32.179 -P 514 -T "Test syslog ICASA DEV"
 
 # Verificar en Splunk Cloud (cuando esté configurado)
 # index=network sourcetype=syslog | head 10
@@ -117,7 +117,7 @@ logger -n 10.2.32.180 -P 514 -T "Test syslog ICASA DEV"
 
 | Síntoma | Solución |
 |---------|----------|
-| No llegan eventos | Verificar firewall LAN → colector :514 |
+| No llegan eventos | Verificar firewall LAN → MONITOR :514 |
 | UF no reenvía | Verificar outputs.conf y conectividad a proxy |
 | Cert SSL error | Importar CA del proxy en UF |
 | Sourcetype incorrecto | Ajustar inputs.conf por tipo de dispositivo |

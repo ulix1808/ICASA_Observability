@@ -3,7 +3,14 @@
 Ambiente: **DEV**  
 Destino: **Splunk Cloud** (URL pendiente por licencia)
 
-## Arquitectura recomendada
+## Servidores LAN
+
+| Servidor | IP | Rol Splunk |
+|----------|-----|------------|
+| STMPLPOCOB MONITOR | `10.2.32.179` | Splunk UF — recibe syslog |
+| STMPLPOCOB COLECTOR | `10.2.32.180` | SC4SNMP — polling SNMP |
+
+## Arquitectura
 
 ```mermaid
 flowchart TB
@@ -11,65 +18,67 @@ flowchart TB
         DEV1["Equipos de red<br/>Syslog TCP 514"]
         DEV2["Servidores<br/>Syslog"]
         SNMP["Dispositivos SNMP<br/>v2c / v3"]
-        COL["STMPLPOCOB COLECTOR<br/>10.2.32.180<br/>RHEL 9"]
+        MON["STMPLPOCOB MONITOR<br/>10.2.32.179"]
+        COL["STMPLPOCOB COLECTOR<br/>10.2.32.180"]
     end
 
-    subgraph COL_COMP["Componentes en colector"]
-        UF["Splunk Universal Forwarder<br/>recibe syslog :514<br/>reenvía a Cloud"]
-        SC4["SC4SNMP<br/>polling SNMP<br/>→ HEC"]
+    subgraph MON_COMP["10.2.32.179"]
+        UF["Splunk Universal Forwarder"]
+    end
+
+    subgraph COL_COMP["10.2.32.180"]
+        SC4["SC4SNMP"]
     end
 
     subgraph DMZ["DMZ"]
-        PROXY["Nginx Proxy<br/>10.250.5.12<br/>:8444 → Splunk Cloud"]
+        PROXY["Nginx Proxy<br/>10.250.5.12<br/>:8444"]
     end
 
     subgraph CLOUD["Splunk Cloud"]
-        SC["Splunk Cloud<br/>Indexación + búsqueda"]
+        SC["Indexación + búsqueda"]
     end
 
     DEV1 --> UF
     DEV2 --> UF
     SNMP --> SC4
-    SC4 --> UF
+    MON --- UF
+    COL --- SC4
     UF -->|"HTTPS :8444"| PROXY
-    PROXY -->|"HTTPS :443"| SC
+    SC4 -->|"HEC HTTPS :8444"| PROXY
+    PROXY --> SC
 ```
 
 ## Componentes
 
-| Componente | Rol | Ubicación |
-|-----------|-----|-----------|
-| **Universal Forwarder (UF)** | Recibe syslog, reenvía a Splunk Cloud | Colector `10.2.32.180` |
-| **SC4SNMP** | Polling SNMP + traps → HEC | Colector `10.2.32.180` |
-| **Nginx Proxy** | Reverse proxy TLS hacia Splunk Cloud | DMZ `10.250.5.12` |
+| Componente | Rol | Servidor |
+|-----------|-----|----------|
+| **Universal Forwarder (UF)** | Recibe syslog TCP 514, reenvía a Splunk Cloud | `10.2.32.179` |
+| **SC4SNMP** | Polling SNMP + traps → HEC | `10.2.32.180` |
+| **Nginx Proxy** | Reverse proxy TLS hacia Splunk Cloud | `10.250.5.12` |
 | **Splunk Cloud** | Indexación, búsqueda, dashboards | SaaS |
 
-## Por qué Universal Forwarder y no Heavy Forwarder
+## Por qué dos servidores
 
-Para este diseño ICASA recomendamos **UF** en el colector porque:
+- **MONITOR (`.179`):** concentración de logs syslog y Database Agent APM
+- **COLECTOR (`.180`):** servicios de ingesta SNMP y HTTP SDK SAP (carga separada)
 
-- Footprint mínimo en RHEL 9
-- Soporta inputs syslog TCP nativos
-- Puede configurarse con `outputs.conf` apuntando al proxy
-- SC4SNMP envía directamente vía HEC al proxy
-
-Si en el futuro se requiere parsing/enriquecimiento local, evaluar migrar a Heavy Forwarder.
+SC4SNMP envía datos vía HEC **directamente al proxy** desde `.180`, sin pasar por el UF en `.179`.
 
 ## Índices sugeridos (pendiente confirmar)
 
 | Índice | Sourcetype sugerido | Fuente |
 |--------|---------------------|--------|
-| `network` | `syslog:network` | Equipos de comunicación |
-| `os` | `syslog:linux` / `syslog:windows` | Servidores |
-| `snmp` | `snmp:trap`, `snmp:polling` | SC4SNMP |
-| `sap` | `sap:syslog` | SAP (si aplica) |
+| `network` | `syslog:network` | Equipos de comunicación → `.179` |
+| `os` | `syslog:linux` / `syslog:windows` | Servidores → `.179` |
+| `snmp` | `snmp:trap`, `snmp:polling` | SC4SNMP en `.180` |
 
 ## Flujo de datos
 
-1. Dispositivos de red envían **syslog TCP 514** al colector
-2. UF recibe, taggea con sourcetype y reenvía vía proxy a Splunk Cloud
-3. SC4SNMP hace polling SNMP en LAN, envía métricas/traps vía HEC al proxy
-4. Proxy termina TLS y reenvía a endpoint Splunk Cloud
+1. Dispositivos de red envían **syslog TCP 514** a `10.2.32.179`
+2. UF en MONITOR reenvía vía proxy `:8444` a Splunk Cloud
+3. SC4SNMP en COLECTOR hace polling SNMP en LAN
+4. SC4SNMP envía métricas/traps vía HEC al proxy `:8444`
+5. Proxy termina TLS y reenvía a Splunk Cloud
 
 ## Pendientes
 
@@ -83,5 +92,4 @@ Ver [pendientes.md](../00-arquitectura/pendientes.md).
 ## Referencias
 
 - [Splunk Universal Forwarder](https://docs.splunk.com/Documentation/Forwarder)
-- [Splunk Cloud — Data Management](https://docs.splunk.com/Documentation/SCloud)
 - [Splunk Connect for SNMP](https://splunk.github.io/splunk-connect-for-snmp/main/)

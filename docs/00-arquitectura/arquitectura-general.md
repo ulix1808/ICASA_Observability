@@ -4,9 +4,16 @@
 
 La solución despliega observabilidad en tres capas:
 
-1. **LAN interna** — Fuentes de datos, agentes AppDynamics y colector Splunk
+1. **LAN interna** — Dos servidores RHEL 9 de observabilidad + fuentes de datos
 2. **DMZ** — Proxy Nginx como único punto de salida a Internet (TCP 443)
 3. **Cloud** — AppDynamics SaaS y Splunk Cloud
+
+## Servidores LAN
+
+| Servidor | IP | Componentes |
+|----------|-----|-------------|
+| **STMPLPOCOB MONITOR** | `10.2.32.179` | Database Agent, Splunk UF (syslog) |
+| **STMPLPOCOB COLECTOR** | `10.2.32.180` | HTTP SDK (SAP), SC4SNMP |
 
 ## Diagrama de componentes
 
@@ -16,7 +23,8 @@ flowchart TB
         SQL[(SQL Server<br/>pendiente IP)]
         SAP["SAP NetWeaver<br/>ABAP Agent"]
         IIS["Windows Server<br/>.NET Agent + IIS"]
-        NET["Equipos de red<br/>Syslog / SNMP"]
+        NET["Equipos de red"]
+        MON["STMPLPOCOB MONITOR<br/>10.2.32.179<br/>RHEL 9"]
         COL["STMPLPOCOB COLECTOR<br/>10.2.32.180<br/>RHEL 9"]
     end
 
@@ -26,28 +34,31 @@ flowchart TB
     end
 
     subgraph CLOUD["Internet / Cloud"]
-        APPD["AppDynamics SaaS<br/>teresa202606020142139<br/>.saas.appdynamics.com"]
-        ANALYTICS["Analytics API<br/>analytics.api.appdynamics.com"]
-        SPLUNK["Splunk Cloud<br/>URL pendiente licencia"]
+        APPD["AppDynamics SaaS"]
+        ANALYTICS["Analytics API"]
+        SPLUNK["Splunk Cloud"]
     end
 
-    SQL -->|"JDBC :1433"| COL
+    SQL -->|"JDBC :1433"| MON
+    NET -->|"Syslog TCP :514"| MON
+    NET -->|"SNMP"| COL
     SAP -->|"HTTP SDK remoto<br/>:7999 / :8080"| COL
     IIS -->|"HTTPS :443"| PROXY
-    NET -->|"Syslog TCP :514<br/>SNMP"| COL
 
-    COL -->|"Database Agent<br/>Machine Agent data<br/>HEC / UF<br/>HTTPS :443"| FW
+    MON -->|"DB Agent :443<br/>UF :8444"| FW
+    COL -->|"HTTP SDK :443<br/>SC4SNMP :8444"| FW
     FW --> PROXY
-    PROXY -->|"HTTPS :443"| APPD
-    PROXY -->|"HTTPS :443"| ANALYTICS
-    PROXY -->|"HTTPS :443"| SPLUNK
+    PROXY --> APPD
+    PROXY --> ANALYTICS
+    PROXY --> SPLUNK
 ```
 
 ## Inventario de servidores
 
 | Rol | Hostname | IP | SO | Componentes |
 |-----|----------|-----|-----|-------------|
-| Colector | STMPLPOCOB COLECTOR | `10.2.32.180` | RHEL 9 | Database Agent, HTTP SDK, SC4SNMP, Splunk UF |
+| Monitoreo APM + Logs | STMPLPOCOB MONITOR | `10.2.32.179` | RHEL 9 | Database Agent, Splunk UF |
+| Colector SAP + SNMP | STMPLPOCOB COLECTOR | `10.2.32.180` | RHEL 9 | HTTP SDK, SC4SNMP |
 | Proxy DMZ | STMPDMZPOCOB PROXY | `10.250.5.12` | RHEL 9 | Nginx reverse proxy |
 | SQL Server | Pendiente | Pendiente | Windows/Linux | Base de datos monitoreada |
 | SAP | Pendiente | Pendiente | Pendiente | ABAP Agent (imports TMS) |
@@ -66,19 +77,11 @@ sequenceDiagram
     AGT->>NGX: HTTPS (cert del proxy)
     Note over AGT: Agente confía CA/proxy cert
     NGX->>APPD: HTTPS (cert público SaaS)
-    Note over NGX: Nginx valida cert upstream<br/>con CA públicas del SO
     APPD-->>NGX: Respuesta
     NGX-->>AGT: Respuesta
 ```
 
-**Importante:** No se requiere certificado compuesto. Son dos certificados independientes:
-
-| Conexión | Certificado que valida el cliente | Certificado que presenta el servidor |
-|----------|-----------------------------------|--------------------------------------|
-| Agente → Proxy | CA interna o autofirmado del proxy | Cert del proxy (`proxy.crt`) |
-| Proxy → AppDynamics SaaS | CA públicas (DigiCert, etc.) | Cert de AppDynamics SaaS |
-
-### SAP — HTTP SDK remoto
+### SAP — HTTP SDK remoto (colector 10.2.32.180)
 
 ```mermaid
 sequenceDiagram
@@ -87,22 +90,22 @@ sequenceDiagram
     participant NGX as Nginx Proxy
     participant APPD as AppDynamics SaaS
 
-    ABAP->>SDK: HTTP local/LAN<br/>:8080 o vía SDK Manager :7999
+    ABAP->>SDK: HTTP LAN :7999 / :8080
     SDK->>NGX: HTTPS :443
     NGX->>APPD: HTTPS :443
 ```
 
-El ABAP Agent **no** se conecta directamente al proxy. Apunta al HTTP SDK en el colector. El HTTP SDK envía métricas al controller vía proxy.
+El ABAP Agent apunta al HTTP SDK en **10.2.32.180** (colector). El HTTP SDK envía métricas al controller vía proxy.
 
 ### Splunk — Syslog y SNMP
 
 ```mermaid
 flowchart LR
-    DEV["Dispositivos red<br/>Syslog TCP 514"] --> UF["Splunk UF<br/>10.2.32.180"]
+    DEV["Dispositivos red<br/>Syslog TCP 514"] --> UF["Splunk UF<br/>10.2.32.179"]
     SNMP["Dispositivos SNMP"] --> SC4["SC4SNMP<br/>10.2.32.180"]
-    SC4 --> UF
-    UF -->|"HTTPS :443"| PROXY["Nginx Proxy<br/>10.250.5.12"]
-    PROXY -->|"HTTPS :443"| SC["Splunk Cloud"]
+    UF -->|"HTTPS :8444"| PROXY["Nginx Proxy<br/>10.250.5.12"]
+    SC4 -->|"HEC HTTPS :8444"| PROXY
+    PROXY --> SC["Splunk Cloud"]
 ```
 
 ## Puertos requeridos
@@ -111,10 +114,13 @@ flowchart LR
 
 | Origen | Destino | Puerto | Protocolo | Uso |
 |--------|---------|--------|-----------|-----|
-| `10.2.32.180` | `10.250.5.12` | 443 | TCP | Todos los agentes/colectores → Proxy |
+| `10.2.32.179` | `10.250.5.12` | 443 | TCP | Database Agent → Proxy |
+| `10.2.32.179` | `10.250.5.12` | 8444 | TCP | Splunk UF → Proxy |
+| `10.2.32.180` | `10.250.5.12` | 443 | TCP | HTTP SDK → Proxy |
+| `10.2.32.180` | `10.250.5.12` | 8444 | TCP | SC4SNMP HEC → Proxy |
 | Servidores IIS (LAN) | `10.250.5.12` | 443 | TCP | .NET Agent → Proxy |
 | SAP app servers | `10.2.32.180` | 7999, 8080 | TCP | ABAP → HTTP SDK |
-| Equipos red | `10.2.32.180` | 514 | TCP | Syslog |
+| Equipos red | `10.2.32.179` | 514 | TCP | Syslog |
 
 ### Firewall DMZ → Internet
 
@@ -128,24 +134,13 @@ flowchart LR
 
 | Origen | Destino | Puerto | Protocolo | Uso |
 |--------|---------|--------|-----------|-----|
-| `10.2.32.180` | SQL Server | 1433 | TCP | Database Agent JDBC |
+| `10.2.32.179` | SQL Server | 1433 | TCP | Database Agent JDBC |
+| `10.2.32.180` | Dispositivos red | 161 | UDP | SC4SNMP polling |
+| Dispositivos red | `10.2.32.180` | 162 | UDP | SNMP traps |
 
 ## Modelo de certificados TLS
 
-Ver documentación detallada en [certificados-tls.md](../01-proxy-nginx/certificados-tls.md).
-
-### Opción A — CA corporativa (recomendada producción)
-
-1. Generar CSR en el proxy
-2. CA interna emite certificado para `appd-proxy.icasa.local` (o FQDN acordado)
-3. Instalar cert + key en Nginx
-4. Distribuir CA root/intermedia a todos los agentes (Java truststore, Windows cert store)
-
-### Opción B — Autofirmado (DEV / pruebas)
-
-1. Script `scripts/generate-certs-selfsigned.sh` genera CA + cert del proxy
-2. Importar CA en truststore de cada agente
-3. Validar handshake antes de instalar agentes
+Ver [certificados-tls.md](../01-proxy-nginx/certificados-tls.md).
 
 ## Licencias AppDynamics (DEV)
 
@@ -163,7 +158,8 @@ Ver documentación detallada en [certificados-tls.md](../01-proxy-nginx/certific
 | Tipo de proxy | Reverse proxy Nginx |
 | Autenticación proxy | No requerida |
 | Salida a Internet | Solo desde DMZ (`10.250.5.12`) |
-| HTTP SDK SAP | Máquina independiente = colector (`10.2.32.180`) |
+| Database Agent + Splunk UF | `10.2.32.179` (MONITOR) |
+| HTTP SDK SAP + SC4SNMP | `10.2.32.180` (COLECTOR) |
 | Ambiente documentado | DEV |
 | Idioma documentación | Español |
 

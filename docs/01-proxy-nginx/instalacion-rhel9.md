@@ -75,7 +75,7 @@ curl -s -o /dev/null -w "%{http_code}" \
   https://teresa202606020142139.saas.appdynamics.com/controller/rest/serverstatus
 # Esperado: 200
 
-# Test desde LAN (ejecutar en 10.2.32.180)
+# Test desde LAN (ejecutar en 10.2.32.179 o 10.2.32.180)
 curl -k https://10.250.5.12/health
 # Esperado: "OK"
 ```

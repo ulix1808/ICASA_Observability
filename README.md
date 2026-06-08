@@ -8,28 +8,31 @@ Repositorio: [github.com/ulix1808/ICASA_Observability](https://github.com/ulix18
 
 | Componente | Tecnología | Servidor |
 |------------|-----------|----------|
-| APM — SQL Server | AppDynamics Database Agent | RHEL 9 — Colector `10.2.32.180` |
+| APM — SQL Server | AppDynamics Database Agent | RHEL 9 — `10.2.32.179` (MONITOR) |
+| Logs — Syslog | Splunk Universal Forwarder | RHEL 9 — `10.2.32.179` (MONITOR) |
+| APM — SAP | ABAP Agent + HTTP SDK | SAP (LAN) + HTTP SDK en `10.2.32.180` |
+| SNMP | Splunk Connect for SNMP (SC4SNMP) | RHEL 9 — `10.2.32.180` (COLECTOR) |
 | APM — IIS | AppDynamics .NET Agent + Machine Agent | Windows Server (LAN) |
-| APM — SAP | ABAP Agent + HTTP SDK + Machine Agent | SAP (LAN) + HTTP SDK en colector |
 | Proxy salida | Nginx reverse proxy | RHEL 9 DMZ — `10.250.5.12` |
-| Logs | Syslog TCP/514 → Splunk Cloud | Colector → Proxy → Cloud |
-| SNMP | Splunk Connect for SNMP (SC4SNMP) | RHEL 9 — Colector `10.2.32.180` |
 | Controller APM | AppDynamics SaaS | `teresa202606020142139.saas.appdynamics.com` |
 
 ## Arquitectura de red
 
 ```
-LAN (10.2.x.x)                         DMZ                         Internet
-┌─────────────────────────┐    ┌──────────────────┐    ┌─────────────────────────┐
-│ STMPLPOCOB COLECTOR     │    │ Firewall         │    │ AppDynamics SaaS        │
-│ 10.2.32.180             │───►│                  │───►│ teresa...appdynamics.com│
-│  • Database Agent       │443 │ STMPDMZPOCOB     │443 │ analytics.api.appd...   │
-│  • HTTP SDK (SAP)       │    │ PROXY            │    ├─────────────────────────┤
-│  • SC4SNMP              │    │ 10.250.5.12      │    │ Splunk Cloud            │
-│  • Splunk UF (syslog)   │    │ (Nginx RHEL 9)   │    │ (URL pendiente licencia)│
-└─────────────────────────┘    └──────────────────┘    └─────────────────────────┘
+LAN (10.2.x.x)                              DMZ                    Internet
+┌──────────────────────────┐         ┌──────────────────┐    ┌─────────────────────┐
+│ STMPLPOCOB MONITOR       │         │ Firewall         │    │ AppDynamics SaaS    │
+│ 10.2.32.179              │──443───►│                  │───►│ teresa...appdynamics│
+│  • Database Agent        │──8444──►│ STMPDMZPOCOB     │443 │ analytics.api...    │
+│  • Splunk UF (syslog)    │         │ PROXY            │    ├─────────────────────┤
+├──────────────────────────┤         │ 10.250.5.12      │    │ Splunk Cloud        │
+│ STMPLPOCOB COLECTOR      │──443───►│ (Nginx RHEL 9)   │8444│ (URL pendiente)     │
+│ 10.2.32.180              │──8444──►│                  │    └─────────────────────┘
+│  • HTTP SDK (SAP)        │         └──────────────────┘
+│  • SC4SNMP              │
+└──────────────────────────┘
          ▲
-         │ Syslog TCP/514, SNMP
+         │ Syslog TCP/514 → .179  |  SNMP → .180
    Servidores, equipos de red, SAP, SQL Server, IIS
 ```
 
@@ -39,7 +42,7 @@ LAN (10.2.x.x)                         DMZ                         Internet
 |---------|---------|----------|
 | AppDynamics Database Agent | 26.4.0.5606 | [packages/db-agent-26.4.0.5606.zip](packages/db-agent-26.4.0.5606.zip) |
 
-Después de descomprimir, reemplazar `conf/controller-info.xml` con el del repo:
+Después de descomprimir en **10.2.32.179**:
 
 ```bash
 unzip db-agent-26.4.0.5606.zip -d /opt/appdynamics/
@@ -104,12 +107,12 @@ cp .env.example .env
 
 1. **Proxy Nginx** en DMZ (`10.250.5.12`) + certificados TLS
 2. **Validar conectividad** proxy → AppDynamics SaaS y Splunk Cloud
-3. **Database Agent** en colector (`10.2.32.180`)
-4. **Splunk UF + Syslog** en colector
-5. **SC4SNMP** en colector
+3. **Database Agent** en MONITOR (`10.2.32.179`)
+4. **Splunk UF + Syslog** en MONITOR (`10.2.32.179`)
+5. **SC4SNMP** en COLECTOR (`10.2.32.180`)
 6. **.NET Agent** en servidores IIS (LAN)
 7. **SAP ABAP Agent** (imports TMS por equipo BASIS)
-8. **HTTP SDK** en colector + configuración ABAP Agent
+8. **HTTP SDK** en COLECTOR (`10.2.32.180`) + configuración ABAP Agent
 
 ## Referencias oficiales
 

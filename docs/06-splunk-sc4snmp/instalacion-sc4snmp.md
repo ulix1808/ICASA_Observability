@@ -1,8 +1,10 @@
 # Splunk Connect for SNMP (SC4SNMP)
 
-Colector: **STMPLPOCOB COLECTOR** — `10.2.32.180`  
+Servidor: **STMPLPOCOB COLECTOR** — `10.2.32.180`  
 Red: **LAN interna** (polling de dispositivos de red)  
-Destino: **Splunk Cloud** vía proxy DMZ
+Destino: **Splunk Cloud** vía proxy DMZ (`10.250.5.12:8444`)
+
+> **Nota:** El Splunk UF (syslog) corre en el servidor separado **10.2.32.179** (MONITOR). SC4SNMP envía datos vía HEC directamente al proxy.
 
 Documentación oficial: [Splunk Connect for SNMP](https://splunk.github.io/splunk-connect-for-snmp/main/)
 

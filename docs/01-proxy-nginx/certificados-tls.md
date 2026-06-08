@@ -96,7 +96,7 @@ sudo cp /etc/nginx/ssl/ca.crt $DB_AGENT_HOME/conf/
 
 ## Validación
 
-### Desde el colector (10.2.32.180)
+### Desde MONITOR (10.2.32.179) o COLECTOR (10.2.32.180)
 
 ```bash
 # Verificar certificado del proxy

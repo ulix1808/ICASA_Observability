@@ -14,7 +14,7 @@ Elementos marcados como pendientes que deben completarse antes o durante la impl
 
 | # | Item | Responsable | Notas |
 |---|------|-------------|-------|
-| 4 | IP/hostname SQL Server | DBA | Database Agent en `10.2.32.180` conecta por JDBC |
+| 4 | IP/hostname SQL Server | DBA | Database Agent en `10.2.32.179` conecta por JDBC |
 | 5 | Usuario SQL con permisos GRANT | DBA | Según documentación AppDynamics DB permissions |
 | 6 | Tipo autenticación SQL | DBA | SQL Auth vs Windows Auth — pendiente |
 

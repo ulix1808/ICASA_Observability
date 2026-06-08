@@ -15,6 +15,11 @@ flowchart TB
         SDK["HTTP SDK + SDK Manager<br/>:8080 / :7999"]
     end
 
+    subgraph MON["STMPLPOCOB MONITOR — 10.2.32.179"]
+        DB["Database Agent"]
+        UF["Splunk UF"]
+    end
+
     subgraph DMZ["DMZ"]
         PROXY["Nginx Proxy<br/>10.250.5.12:443"]
     end
@@ -37,7 +42,7 @@ flowchart TB
 |-----------|-----------|-------|
 | ABAP Agent | SAP (imports TMS) | Equipo BASIS |
 | Machine Agent | Cada SAP app server | Métricas OS + eventos SAP |
-| HTTP SDK | Colector `10.2.32.180` | **Remoto** — ABAP apunta aquí |
+| HTTP SDK | COLECTOR `10.2.32.180` | **Remoto** — ABAP apunta aquí (separado de DB Agent en `.179`) |
 | Controller | `teresa202606020142139` | DEV — no usar controller anterior |
 | Instaladores | Portal oficial AppDynamics | Versión más reciente compatible |
 
@@ -46,7 +51,7 @@ flowchart TB
 - Acceso al Application Server SAP (NetWeaver)
 - Usuario administrador SO en servidores SAP (Machine Agent)
 - Comunicación SAP app servers → HTTP SDK colector: puertos **7999** (SDK Manager) y **8080+** (HTTP SDK instances)
-- Comunicación colector/Machine Agent → proxy: **TCP 443**
+- Comunicación HTTP SDK (`.180`) / Machine Agent SAP → proxy: **TCP 443**
 - Proxy → Internet: **TCP 443** hacia AppDynamics SaaS
 - Directorio `/opt/appdynamics/` en servidores Linux
 - JDK 1.8+ en servidores Linux
