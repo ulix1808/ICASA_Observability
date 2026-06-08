@@ -84,6 +84,7 @@ configs/
 
 scripts/
 ├── install-nginx-proxy.sh
+├── generate-nginx-configs.sh
 ├── install-db-agent.sh
 ├── generate-certs-selfsigned.sh
 ├── install-truststore-agent.sh

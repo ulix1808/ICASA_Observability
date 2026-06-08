@@ -1,6 +1,9 @@
 #!/bin/bash
 # install-nginx-proxy.sh — Instala Nginx reverse proxy en RHEL 9 (DMZ)
 # Uso: sudo ./scripts/install-nginx-proxy.sh
+#
+# Genera automáticamente los archivos de configuración si no existen.
+# Pregunta hosts de AppDynamics y Splunk (Enter = valor por defecto).
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -14,31 +17,47 @@ if [[ -f "$REPO_DIR/.env" ]]; then
     # shellcheck disable=SC1091
     source "$REPO_DIR/.env"
     set +a
+    echo "Variables cargadas desde .env"
 fi
 
 # 1. Instalar paquetes
-echo "[1/5] Instalando Nginx..."
+echo ""
+echo "[1/6] Instalando Nginx..."
 dnf install -y nginx openssl firewalld
 
 # 2. Crear directorio SSL
-echo "[2/5] Configurando SSL..."
+echo ""
+echo "[2/6] Configurando SSL..."
 mkdir -p /etc/nginx/ssl
 
 if [[ ! -f /etc/nginx/ssl/proxy.crt ]]; then
     echo "  No se encontró certificado. Generando autofirmado DEV..."
-    "$SCRIPT_DIR/generate-certs-selfsigned.sh"
+    PROXY_FQDN="${PROXY_FQDN:-appd-proxy.icasa.local}" \
+        "$SCRIPT_DIR/generate-certs-selfsigned.sh"
 fi
 
-# 3. Copiar configs
-echo "[3/5] Copiando configuración Nginx..."
-cp "$REPO_DIR/configs/nginx/appdynamics-upstream.conf" /etc/nginx/conf.d/
-cp "$REPO_DIR/configs/nginx/splunk-upstream.conf" /etc/nginx/conf.d/
+# 3. Generar configuración Nginx (interactivo o desde .env)
+echo ""
+echo "[3/6] Generando configuración Nginx..."
+"$SCRIPT_DIR/generate-nginx-configs.sh"
 
-# 4. Validar y reiniciar
-echo "[4/5] Validando configuración..."
+# 4. Deshabilitar server por defecto en puerto 80 (evita conflicto)
+echo ""
+echo "[4/6] Ajustando configuración por defecto..."
+if [[ -f /etc/nginx/nginx.conf ]]; then
+    if grep -q "listen.*80 default_server" /etc/nginx/nginx.conf 2>/dev/null; then
+        sed -i 's/^\(\s*listen\s\+80\s\+default_server;\)/    # \1 # deshabilitado por ICASA/' /etc/nginx/nginx.conf || true
+    fi
+fi
+
+# 5. Validar configuración
+echo ""
+echo "[5/6] Validando configuración..."
 nginx -t
 
-echo "[5/5] Iniciando Nginx..."
+# 6. Iniciar servicio
+echo ""
+echo "[6/6] Iniciando Nginx..."
 systemctl enable nginx
 systemctl restart nginx
 
@@ -50,9 +69,16 @@ firewall-cmd --reload 2>/dev/null || true
 
 echo ""
 echo "=== Instalación completada ==="
-echo "Health check: curl -k https://localhost/health"
-echo "Verificar upstream: curl -s https://teresa202606020142139.saas.appdynamics.com/controller/rest/serverstatus"
 echo ""
-echo "Reiniciar Nginx tras cambios de config:"
+echo "Puertos activos esperados:"
+ss -tlnp | grep nginx || true
+echo ""
+echo "Health check:"
+echo "  curl -k https://localhost/health"
+echo ""
+echo "Regenerar solo configs (sin reinstalar):"
+echo "  sudo ./scripts/generate-nginx-configs.sh"
 echo "  sudo nginx -t && sudo systemctl reload nginx"
-echo "  sudo systemctl restart nginx   # reinicio completo si es necesario"
+echo ""
+echo "Reinicio completo:"
+echo "  sudo systemctl restart nginx"

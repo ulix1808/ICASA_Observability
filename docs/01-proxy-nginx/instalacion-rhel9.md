@@ -19,13 +19,34 @@ Nginx actúa como reverse proxy TLS en la DMZ. Es el **único componente con sal
 
 ## Instalación automatizada
 
+El script **genera automáticamente** los archivos en `/etc/nginx/conf.d/` — no es necesario copiarlos manualmente.
+
 ```bash
 git clone https://github.com/ulix1808/ICASA_Observability.git
 cd ICASA_Observability
 cp .env.example .env
-# Editar .env con valores reales
+# Opcional: editar .env con hosts reales antes de instalar
 sudo ./scripts/install-nginx-proxy.sh
 ```
+
+Durante la instalación el script pregunta (Enter = valor por defecto):
+
+| Pregunta | Valor por defecto |
+|----------|-------------------|
+| Host AppDynamics Controller | `teresa202606020142139.saas.appdynamics.com` |
+| Host Analytics Events API | `analytics.api.appdynamics.com` |
+| Host Splunk Cloud (HEC) | `input-prd-pendiente.splunkcloud.com` |
+| IP del proxy DMZ | `10.250.5.12` |
+| FQDN del proxy | `appd-proxy.icasa.local` |
+
+Para **regenerar solo la configuración** sin reinstalar:
+
+```bash
+sudo ./scripts/generate-nginx-configs.sh
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+Variables en `.env` que el script usa como defaults: `APPD_CONTROLLER_HOST`, `APPD_ANALYTICS_HOST`, `SPLUNK_CLOUD_HOST`, `PROXY_HOST`, `PROXY_FQDN`.
 
 ## Instalación manual paso a paso
 
@@ -46,13 +67,20 @@ Elegir una opción:
 sudo ./scripts/generate-certs-selfsigned.sh
 ```
 
-### 3. Copiar configuración Nginx
+### 3. Generar configuración Nginx
+
+```bash
+sudo ./scripts/generate-nginx-configs.sh
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+Alternativa manual (copiar plantillas del repo):
 
 ```bash
 sudo cp configs/nginx/appdynamics-upstream.conf /etc/nginx/conf.d/
 sudo cp configs/nginx/splunk-upstream.conf /etc/nginx/conf.d/
-sudo nginx -t
-sudo systemctl restart nginx
+# Editar hosts en los archivos antes de reiniciar
 ```
 
 ### 4. Firewall local (RHEL)
