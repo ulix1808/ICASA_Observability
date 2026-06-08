@@ -4,8 +4,9 @@
 *.p12
 *.jks
 *.zip
+!packages/*.zip
 
-# Database Agent — solo commitear conf/, no el paquete completo
+# Database Agent — solo commitear conf/, no el paquete descomprimido
 db-agent-26.4.0.5606(1)/
 db-agent/lib/
 db-agent/*.jar

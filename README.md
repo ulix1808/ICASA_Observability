@@ -33,6 +33,25 @@ LAN (10.2.x.x)                         DMZ                         Internet
    Servidores, equipos de red, SAP, SQL Server, IIS
 ```
 
+## Descargas de instaladores
+
+| Paquete | Versión | Descarga |
+|---------|---------|----------|
+| AppDynamics Database Agent | 26.4.0.5606 | [packages/db-agent-26.4.0.5606.zip](packages/db-agent-26.4.0.5606.zip) |
+
+Después de descomprimir, reemplazar `conf/controller-info.xml` con el del repo:
+
+```bash
+unzip db-agent-26.4.0.5606.zip -d /opt/appdynamics/
+cp db-agent/conf/controller-info.xml /opt/appdynamics/db-agent-26.4.0.5606/conf/
+```
+
+URL directa:
+
+```
+https://github.com/ulix1808/ICASA_Observability/raw/main/packages/db-agent-26.4.0.5606.zip
+```
+
 ## Documentación
 
 | # | Tema | Archivo |
