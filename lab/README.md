@@ -29,6 +29,139 @@ Demostración en contenedores del escenario ICASA: **Squid forward proxy → Ngi
                                                                   └─────────────┘
 ```
 
+## Teoría de certificados TLS
+
+Esta sección explica **por qué** fallan las pruebas del lab y qué ocurre en el ambiente real ICASA.
+
+### ¿Qué problema resuelve HTTPS?
+
+Sin TLS, cualquiera en la red puede leer o modificar el tráfico. Con HTTPS:
+
+1. El **servidor** demuestra su identidad con un **certificado digital**.
+2. Cliente y servidor acuerdan una **clave de cifrado** (handshake TLS).
+3. El tráfico viaja **cifrado**.
+
+En ICASA, el agente .NET no habla directo con AppDynamics SaaS. Habla con **Nginx en la DMZ**, que a su vez habla con SaaS. Eso implica **dos mundos TLS distintos**.
+
+### Los tres actores del certificado
+
+Cada certificado tiene piezas clave:
+
+| Campo | En el lab | Significado |
+|-------|-----------|-------------|
+| **Subject / CN** | `appd-proxy.icasa.local` | Identidad declarada del servidor |
+| **Issuer** | `ICASA-Lab-CA` | Autoridad que firmó el certificado |
+| **SAN** (Subject Alternative Name) | `DNS:appd-proxy.icasa.local` | Nombres válidos para conectarse |
+| **Clave privada** | `proxy.key` | Solo en el servidor; nunca se distribuye |
+| **CA raíz** | `ca.crt` | Autoridad de confianza que el cliente debe conocer |
+
+El script `generate-lab-certs.sh` crea esta jerarquía:
+
+```
+ICASA-Lab-CA (ca.crt)  ──firma──►  proxy.crt (para appd-proxy.icasa.local)
+```
+
+En producción, `ICASA-Dev-CA` cumple el mismo rol que `ICASA-Lab-CA`.
+
+### Cadena de confianza (por qué importa `ca.crt`)
+
+El cliente (agente, curl, .NET) no confía en `proxy.crt` por sí solo. Confía si puede construir una cadena hasta una **CA que ya tenga en su almacén de confianza**:
+
+```
+proxy.crt  →  firmado por  →  ICASA-Dev-CA  →  debe estar en Trusted Root
+```
+
+Por eso en Windows se importa **`ca.crt`** (la CA), no `proxy.crt` (el certificado del servidor).
+
+- **Test 6 del lab**: sin `ca.crt` → `unable to get local issuer certificate`
+- En troubleshooting ICASA: el mensaje del .NET Agent pide agregar la CA en `certmgr.msc` → Trusted Root
+
+> Instalar solo el certificado del servidor en Trusted Root es un error común. Lo correcto es importar la **CA raíz** que lo emitió.
+
+### Verificación de hostname (el corazón del lab)
+
+TLS no solo pregunta *“¿confío en quien firmó esto?”*. También pregunta:
+
+> **¿El nombre al que me conecté coincide con el certificado?**
+
+Esa comparación usa el **hostname de la URL**, no la IP por la que llegaste.
+
+```
+Te conectas a:     https://10.250.5.12/health
+Certificado dice:  CN/SAN = appd-proxy.icasa.local
+Resultado:         ❌ hostname mismatch
+```
+
+```
+Te conectas a:     https://appd-proxy.icasa.local/health
+Certificado dice:  CN/SAN = appd-proxy.icasa.local
+Resultado:         ✅ OK (si además confías en la CA)
+```
+
+Eso es el **Test 2** del lab: la CA está instalada, pero la conexión es por IP → falla con `no alternative certificate subject name matches target host name`.
+
+**Tener la CA instalada no basta.** La CA responde “¿quién firmó esto?”. El hostname responde “¿es para el servidor al que me conecté?”.
+
+### Por qué el lab omite la IP del SAN
+
+En producción, `scripts/generate-certs-selfsigned.sh` incluye `IP.1 = 10.250.5.12` como workaround: si conectas por IP, el certificado también cubre esa dirección.
+
+Este lab **no** incluye IP a propósito, para que el fallo sea visible:
+
+| Enfoque | Ventaja | Desventaja |
+|---------|---------|------------|
+| **Solo dominio en SAN** | Correcto; alineado con buenas prácticas | Requiere DNS o entrada en `/etc/hosts` |
+| **Dominio + IP en SAN** | Funciona aunque uses IP en la config | Oculta el problema; el agente debería usar FQDN igual |
+
+La configuración correcta en ICASA sigue siendo **`appd-proxy.icasa.local`**, no la IP.
+
+### Dos capas TLS en el doble proxy
+
+```
+Agente ──[TLS #1]──► Nginx ──[TLS #2]──► AppDynamics SaaS
+         cert proxy              cert público AppD
+         valida: agente          valida: Nginx (CA públicas)
+```
+
+| Salto | Quién presenta certificado | Quién valida | Qué instalar |
+|-------|---------------------------|--------------|--------------|
+| Agente → Nginx | `proxy.crt` (ICASA-Dev-CA) | Agente / .NET | `ca.crt` en Trusted Root |
+| Nginx → SaaS | Certificado público de AppDynamics | Nginx | CA públicas del SO (ya vienen) |
+| Agente → Squid | **Ninguno** (Squid no termina TLS) | — | — |
+
+**Squid no valida el certificado del reverse proxy.** Solo abre un túnel TCP (`CONNECT`) hacia `appd-proxy.icasa.local:443`. El handshake TLS ocurre **entre el agente y Nginx**, después del túnel.
+
+Por eso Squid no necesita `ca.crt`, pero el agente sí.
+
+### Qué falla en cada test (teoría + práctica)
+
+| Test | Qué ocurre a nivel TLS/red |
+|------|---------------------------|
+| **1** `http://IP:443` | No es TLS; Nginx espera handshake → **400 Bad Request** |
+| **2** `https://IP` | Cadena OK, **hostname NO** → mismatch |
+| **3** `https://FQDN` | Cadena OK, **hostname OK** → 200 |
+| **4** FQDN vía Squid | Squid tuneliza; TLS agente↔Nginx con FQDN correcto → 200 |
+| **5** IP vía Squid | Squid puede rechazar (403) o, si deja pasar, TLS falla por hostname |
+| **6** Sin CA | No hay cadena de confianza → error de emisor |
+| **7** `/controller/` | Flujo completo hasta mock SaaS si todo lo anterior es correcto |
+
+### Analogía rápida
+
+- **CA (`ca.crt`)**: lista de notarios que aceptas como válidos.
+- **Certificado del proxy**: credencial que dice “soy el edificio `appd-proxy.icasa.local`”.
+- **Conectar por IP**: llegas pidiendo el edificio `10.250.5.12`, pero la credencial dice `appd-proxy.icasa.local` → rechazo aunque el notario sea legítimo.
+- **Squid**: el taxi que te lleva al edificio; no revisa tu credencial, solo te deja llegar (o no, según ACL).
+
+### Checklist para ICASA
+
+1. **Server del agente** = `appd-proxy.icasa.local` (FQDN del certificado)
+2. **Proxy del agente** = `10.2.32.179:3128` (Squid, no Nginx)
+3. **Trusted Root** = `ICASA-Dev-CA` (`ca.crt`), no el certificado del proxy
+4. **DNS / hosts** = `appd-proxy.icasa.local` → `10.250.5.12`
+5. **Squid** = permitir `CONNECT` a ese host:443, sin SSL Bump
+
+Ver documentación ampliada: [certificados-tls.md](../docs/01-proxy-nginx/certificados-tls.md)
+
 ## Requisitos
 
 - Docker Desktop o Docker Engine + Docker Compose v2
