@@ -4,6 +4,17 @@ Documentación técnica para la implementación de observabilidad en **ICASA**, 
 
 Repositorio: [github.com/ulix1808/ICASA_Observability](https://github.com/ulix1808/ICASA_Observability)
 
+## Arquitectura de doble proxy
+
+El ambiente ICASA requiere **dos capas de proxy**:
+
+```
+Agente (.NET / Java)  →  Squid 10.2.32.179:3128  →  Nginx 10.250.5.12:443  →  AppDynamics SaaS
+         (LAN)              (forward proxy)              (reverse proxy DMZ)
+```
+
+Ver documentación completa: [arquitectura-doble-proxy.md](docs/00-arquitectura/arquitectura-doble-proxy.md)
+
 ## Alcance
 
 | Componente | Tecnología | Servidor |
@@ -65,12 +76,25 @@ https://github.com/ulix1808/ICASA_Observability/raw/main/packages/db-agent-26.4.
 | # | Tema | Archivo |
 |---|------|---------|
 | 0 | Arquitectura general | [docs/00-arquitectura/arquitectura-general.md](docs/00-arquitectura/arquitectura-general.md) |
+| 0b | **Doble proxy (Squid + Nginx)** | [docs/00-arquitectura/arquitectura-doble-proxy.md](docs/00-arquitectura/arquitectura-doble-proxy.md) |
 | 1 | Proxy Nginx + certificados TLS | [docs/01-proxy-nginx/](docs/01-proxy-nginx/) |
 | 2 | Database Agent (RHEL 9 + SQL Server) | [docs/02-database-agent/](docs/02-database-agent/) |
 | 3 | .NET Agent + IIS | [docs/03-dotnet-agent-iis/](docs/03-dotnet-agent-iis/) |
+| 3b | **Troubleshooting doble proxy .NET** | [docs/03-dotnet-agent-iis/troubleshooting-doble-proxy.md](docs/03-dotnet-agent-iis/troubleshooting-doble-proxy.md) |
+| **Lab** | **Laboratorio Docker (doble proxy + TLS)** | [lab/README.md](lab/README.md) |
 | 4 | SAP Monitoring | [docs/04-sap-monitoring/](docs/04-sap-monitoring/) |
 | 5 | Splunk Syslog | [docs/05-splunk-syslog/](docs/05-splunk-syslog/) — [puertos validados](docs/05-splunk-syslog/puertos-splunk-cloud.md) |
 | 6 | Splunk Connect for SNMP | [docs/06-splunk-sc4snmp/](docs/06-splunk-sc4snmp/) |
+
+## Laboratorio Docker
+
+Demostración local del doble proxy y por qué **HTTPS por IP falla** con certificados de dominio:
+
+```bash
+cd lab && ./scripts/run-demo.sh
+```
+
+Ver [lab/README.md](lab/README.md).
 
 ## Configuraciones y scripts
 

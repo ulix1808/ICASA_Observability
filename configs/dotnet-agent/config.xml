@@ -2,8 +2,8 @@
 <appdynamics-agent xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                    xmlns:xsd="http://www.w3.org/2001/XMLSchema">
 
-  <!-- Controller apunta al PROXY en DMZ -->
-  <controller host="10.250.5.12"
+  <!-- Reverse proxy Nginx en DMZ — destino HTTPS del agente -->
+  <controller host="appd-proxy.icasa.local"
               port="443"
               ssl="true"
               enable_tls12="true"
@@ -14,11 +14,14 @@
 
     <application name="ICASA-DEV-IIS" />
 
-    <!-- Reverse proxy — controller host es el proxy -->
-    <proxy host="10.250.5.12" port="443" enabled="true" />
+    <!-- Forward proxy Squid en MONITOR — NO confundir con reverse proxy Nginx -->
+    <proxy host="10.2.32.179" port="3128" enabled="true" />
   </controller>
 
-  <!-- Instrumentación automática de todos los app pools IIS -->
+  <!-- Alternativa si DNS no resuelve appd-proxy.icasa.local:
+  <controller host="10.250.5.12" port="443" ssl="true" enable_tls12="true">
+  -->
+
   <iis>
     <automatic />
   </iis>

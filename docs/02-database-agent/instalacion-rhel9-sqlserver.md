@@ -97,7 +97,18 @@ Valores DEV:
 <account-access-key>CAMBIAR</account-access-key>
 ```
 
-> El agente apunta al **proxy** (`10.250.5.12`), no al FQDN SaaS directamente.
+> El agente apunta al **reverse proxy** (`10.250.5.12`), no al FQDN SaaS directamente.
+
+#### 4b. Forward proxy Squid (doble proxy ICASA)
+
+Si el servidor del agente sale a Internet vía Squid en `10.2.32.179:3128`, agregar al servicio systemd:
+
+```bash
+-Dappdynamics.http.proxyHost=10.2.32.179
+-Dappdynamics.http.proxyPort=3128
+```
+
+Ver [arquitectura-doble-proxy.md](../00-arquitectura/arquitectura-doble-proxy.md).
 
 #### 4. Configurar truststore TLS (certificado autofirmado del proxy)
 

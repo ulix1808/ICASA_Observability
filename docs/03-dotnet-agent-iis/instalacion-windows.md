@@ -1,142 +1,78 @@
 # .NET Agent + IIS — Windows Server
 
 Ambiente: **DEV**  
-Conectividad: Agentes → Proxy `10.250.5.12:443` → AppDynamics SaaS
+Arquitectura: **doble proxy** — ver [arquitectura-doble-proxy.md](../00-arquitectura/arquitectura-doble-proxy.md)
 
 ## Arquitectura
 
 ```mermaid
 flowchart LR
     IIS["IIS + Apps .NET<br/>Windows Server LAN"] --> NET[".NET Agent"]
-    IIS --> MA["Machine Agent<br/>Windows"]
-    NET -->|"HTTPS :443"| PROXY["Nginx Proxy<br/>10.250.5.12"]
-    MA -->|"HTTPS :443"| PROXY
-    PROXY --> APPD["AppDynamics SaaS"]
+    NET -->|"HTTP proxy"| SQUID["Squid Forward Proxy<br/>10.2.32.179:3128"]
+    SQUID -->|"HTTPS CONNECT"| NGX["Nginx Reverse Proxy<br/>10.250.5.12:443"]
+    NGX --> APPD["AppDynamics SaaS"]
 ```
+
+## Configuración del agente
+
+| Campo | Valor |
+|-------|-------|
+| Server (Controller) | `appd-proxy.icasa.local` o `10.250.5.12` |
+| Port | `443` |
+| Enable SSL | ✓ |
+| Enable TLS 1.2 | ✓ |
+| Use proxy | ✓ |
+| **Proxy address** | `10.2.32.179` (Squid — **no** el Nginx) |
+| **Proxy port** | `3128` |
+
+> Si hay problemas de conexión, ver [troubleshooting-doble-proxy.md](troubleshooting-doble-proxy.md)
 
 ## Requisitos
 
 | Requisito | Detalle |
 |-----------|---------|
-| SO | Windows Server 2016+ (validar versión exacta) |
+| SO | Windows Server 2016+ |
 | IIS | Instalado y en ejecución |
-| .NET | Versión pendiente validar |
-| Red | TCP 443 hacia `10.250.5.12` |
-| Certificado CA | CA del proxy en `Cert:\LocalMachine\Root` |
-| Licencia | Enterprise (confirmada) |
+| Forward proxy | Squid en `10.2.32.179:3128` accesible desde el servidor |
+| Certificado CA | `ICASA-Dev-CA` (`ca.crt`) en `Cert:\LocalMachine\Root` |
+| DNS | `appd-proxy.icasa.local` → `10.250.5.12` (o usar IP) |
 
-## Instalación .NET Agent
+## Instalación
 
-### 1. Descargar agente
+### 1. Descargar e instalar agente
 
-Desde [accounts.appdynamics.com/downloads](https://accounts.appdynamics.com/downloads):
+Desde [accounts.appdynamics.com/downloads](https://accounts.appdynamics.com/downloads) → **.NET Agent** → MSI x64.
 
-- Filtrar: **.NET Agent** → versión más reciente
-- Descargar instalador MSI para Windows x64
-
-### 2. Instalar
+### 2. Importar CA del proxy
 
 ```powershell
-# Ejecutar como Administrador
-msiexec /i AppDynamics-DotNetAgent-x64-*.msi /quiet
+Import-Certificate -FilePath "C:\certs\ca.crt" -CertStoreLocation Cert:\LocalMachine\Root
 ```
 
-O usar el **AppDynamics .NET Agent Configuration Utility** incluido en el instalador.
+La CA se genera en el proxy con `generate-certs-selfsigned.sh` → archivo `/etc/nginx/ssl/ca.crt`.
 
-### 3. Importar CA del proxy
+### 3. Configurar config.xml
 
-```powershell
-# Copiar ca.crt del proxy al servidor Windows
-Import-Certificate -FilePath "C:\certs\icasa-ca.crt" `
-  -CertStoreLocation Cert:\LocalMachine\Root
-```
-
-### 4. Configurar config.xml
-
-Ubicación: `%ProgramData%\AppDynamics\DotNetAgent\Config\config.xml`
-
-Usar plantilla: `configs/dotnet-agent/config.xml`
-
-Parámetros clave:
+Plantilla: `configs/dotnet-agent/config.xml`
 
 ```xml
-<controller host="10.250.5.12" port="443" ssl="true" enable_tls12="true">
-  <account name="teresa202606020142139" password="CAMBIAR_ACCESS_KEY" />
+<controller host="appd-proxy.icasa.local" port="443" ssl="true" enable_tls12="true">
+  <account name="teresa202606020142139" password="ACCESS_KEY" />
   <application name="ICASA-DEV-IIS" />
-  <proxy host="10.250.5.12" port="443" enabled="true" />
+  <proxy host="10.2.32.179" port="3128" enabled="true" />
 </controller>
 ```
 
-> **Nota sobre reverse proxy:** En este escenario el `controller host` es el proxy. Nginx reescribe el header `Host` hacia el FQDN SaaS real. El elemento `<proxy>` puede omitirse si el controller host ya es el proxy; incluirlo documenta explícitamente el patrón de red.
-
-### 5. Instrumentación automática IIS
-
-```xml
-<iis>
-  <automatic />
-</iis>
-```
-
-Esto instrumenta automáticamente todos los application pools de IIS.
-
-### 6. Reiniciar servicios
+### 4. Reiniciar y verificar
 
 ```powershell
 Restart-Service AppDynamics.Agent.Coordinator
 iisreset
 ```
 
-## Instalación Machine Agent (Windows)
-
-El Machine Agent recopila métricas de OS (CPU, RAM, disco, red).
-
-### 1. Descargar Machine Agent
-
-Desde portal AppDynamics → **Machine Agent** → Windows ZIP.
-
-### 2. Instalar
-
-```powershell
-Expand-Archive machineagent-bundle-*.zip -DestinationPath "C:\Program Files\AppDynamics\MachineAgent"
-```
-
-### 3. Configurar controller-info.xml
-
-```xml
-<controller-host>10.250.5.12</controller-host>
-<controller-port>443</controller-port>
-<controller-ssl-enabled>true</controller-ssl-enabled>
-<account-name>teresa202606020142139</account-name>
-<account-access-key>CAMBIAR_ACCESS_KEY</account-access-key>
-```
-
-### 4. Instalar como servicio Windows
-
-```powershell
-cd "C:\Program Files\AppDynamics\MachineAgent"
-.\InstallService.bat
-Start-Service AppDynamicsMachineAgent
-```
-
-## Verificación
-
-1. Controller UI → **Applications** → verificar app `ICASA-DEV-IIS`
-2. Controller UI → **Servers** → verificar Machine Agent registrado
-3. Generar tráfico HTTP al sitio IIS y verificar Business Transactions
-
-```powershell
-# Verificar logs .NET Agent
-Get-Content "C:\ProgramData\AppDynamics\DotNetAgent\Logs\*.log" -Tail 50
-```
-
 ## Troubleshooting
 
-| Síntoma | Solución |
-|---------|----------|
-| 407 Proxy Authentication Required | Proxy no requiere auth — verificar config.xml |
-| SSL/TLS error | Importar CA del proxy en cert store Windows |
-| No BT data | Verificar iisreset después de instalar agente |
-| Machine Agent offline | Verificar conectividad :443 a `10.250.5.12` |
+Ver guía completa: [troubleshooting-doble-proxy.md](troubleshooting-doble-proxy.md)
 
 ## Referencias
 

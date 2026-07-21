@@ -1,0 +1,53 @@
+services:
+  # Simula AppDynamics SaaS (solo red DMZ)
+  mock-saas:
+    build: ./mock-saas
+    container_name: icasa-lab-mock-saas
+    networks:
+      dmz:
+        aliases:
+          - teresa202606020142139.saas.appdynamics.com
+
+  # Reverse proxy Nginx — replica STMPDMZPOCOB PROXY (10.250.5.12)
+  reverse-proxy:
+    build: ./reverse-proxy
+    container_name: icasa-lab-reverse-proxy
+    depends_on:
+      - mock-saas
+    volumes:
+      - ./certs/proxy.crt:/etc/nginx/ssl/proxy.crt:ro
+      - ./certs/proxy.key:/etc/nginx/ssl/proxy.key:ro
+    networks:
+      lan:
+        aliases:
+          - appd-proxy.icasa.local
+      dmz:
+
+  # Forward proxy Squid — replica MONITOR (10.2.32.179:3128)
+  forward-proxy:
+    build: ./forward-proxy
+    container_name: icasa-lab-forward-proxy
+    ports:
+      - "13128:3128"
+    networks:
+      lan:
+
+  # Cliente de pruebas — ejecutar con: docker compose run --rm client
+  client:
+    build: ./client
+    container_name: icasa-lab-client
+    depends_on:
+      - forward-proxy
+      - reverse-proxy
+    volumes:
+      - ./certs/ca.crt:/certs/ca.crt:ro
+    networks:
+      lan:
+
+networks:
+  lan:
+    name: icasa-lab-lan
+    driver: bridge
+  dmz:
+    name: icasa-lab-dmz
+    driver: bridge
